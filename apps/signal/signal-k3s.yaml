@@ -91,7 +91,7 @@ spec:
     spec:
       containers:
       - name: backend
-        image: 192.168.2.100:30500/signal-backend:67564c7
+        image: 192.168.2.100:30500/signal-backend:8f2175e
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8000
@@ -152,7 +152,7 @@ spec:
     spec:
       containers:
       - name: frontend
-        image: 192.168.2.100:30500/signal-frontend:67564c7
+        image: 192.168.2.100:30500/signal-frontend:8f2175e
         imagePullPolicy: IfNotPresent
         env:
         # nginx's resolver ignores resolv.conf search domains, so use the FQDN
@@ -203,7 +203,7 @@ spec:
           restartPolicy: Never
           containers:
           - name: nightly
-            image: 192.168.2.100:30500/signal-backend:67564c7
+            image: 192.168.2.100:30500/signal-backend:8f2175e
             imagePullPolicy: IfNotPresent
             command: ["python", "-m", "app.jobs.nightly"]
             env:
