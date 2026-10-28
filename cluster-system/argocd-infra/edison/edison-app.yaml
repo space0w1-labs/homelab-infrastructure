@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: 'https://github.com/space0w1/homelab-infrastructure.git' # e.g., https://github.com/username/my-k8s-manifests.git
+    repoURL: 'https://github.com/space0w1-labs/homelab-infrastructure.git' # e.g., https://github.com/username/my-k8s-manifests.git
     targetRevision: HEAD
     path: 'apps/edison'   # e.g., manifests/base
   destination:

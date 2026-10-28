@@ -6,7 +6,7 @@ metadata:
 spec:
   project: default
   source:
-    repoURL: 'https://github.com/space0w1/homelab-infrastructure.git'
+    repoURL: 'https://github.com/space0w1-labs/homelab-infrastructure.git'
     targetRevision: HEAD
     path: 'apps/signal'
   destination:
