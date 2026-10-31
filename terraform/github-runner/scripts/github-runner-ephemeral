@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# Ephemeral mode loop, run by github-runner-ephemeral.service as root:
+# register with --ephemeral, run exactly one job, repeat.
+set -euo pipefail
+
+# shellcheck source=/dev/null
+source /etc/github-runner/runner.env
+runner_dir=/opt/actions-runner
+runner_user=runner
+
+log() { echo "[github-runner-ephemeral] $*"; }
+
+cd "$runner_dir"
+
+while true; do
+  # Leftovers from a run that didn't finish cleanly would make config.sh refuse.
+  rm -f .runner .credentials .credentials_rsaparams
+
+  rc=0
+  token=$(/usr/local/sbin/github-runner-token) || rc=$?
+  if [[ $rc -ne 0 ]]; then
+    # Auth errors won't fix themselves quickly; back off longer.
+    if [[ $rc -eq 2 ]]; then delay=300; else delay=30; fi
+    log "could not get a registration token, retrying in ${delay}s"
+    sleep "$delay"
+    continue
+  fi
+
+  runuser -u "$runner_user" -- ./config.sh \
+    --unattended \
+    --ephemeral \
+    --url "https://github.com/$GITHUB_ORG" \
+    --token "$token" \
+    --name "$RUNNER_NAME" \
+    --runnergroup "$RUNNER_GROUP" \
+    --labels "$RUNNER_LABELS" \
+    --work _work \
+    --replace
+  unset token
+
+  log "registered; waiting for one job"
+  # run.sh exits after a single job because of --ephemeral; the runner
+  # deregisters itself from GitHub at that point.
+  runuser -u "$runner_user" -- ./run.sh || log "run.sh exited with status $?"
+done

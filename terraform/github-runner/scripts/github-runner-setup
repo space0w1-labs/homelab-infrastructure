@@ -1,0 +1,79 @@
+#!/usr/bin/env bash
+# First-boot setup, run once by cloud-init (runcmd) after Docker is installed.
+# Output ends up in /var/log/cloud-init-output.log.
+set -euo pipefail
+
+# shellcheck source=/dev/null
+source /etc/github-runner/runner.env
+runner_dir=/opt/actions-runner
+runner_user=runner
+
+log() { echo "[github-runner-setup] $*"; }
+
+# --- Runner user ---------------------------------------------------------------
+# Created here rather than with cloud-init's 'users' module, because the docker
+# group only exists once the docker-ce package is installed.
+if ! id "$runner_user" &>/dev/null; then
+  log "creating user '$runner_user' (member of docker, no sudo)"
+  useradd --create-home --shell /bin/bash --groups docker "$runner_user"
+fi
+
+# --- Download and verify the runner -----------------------------------------
+tarball="actions-runner-linux-x64-$RUNNER_VERSION.tar.gz"
+log "downloading $tarball"
+curl --fail --silent --show-error --location --retry 5 \
+  --output "/tmp/$tarball" \
+  "https://github.com/actions/runner/releases/download/v$RUNNER_VERSION/$tarball"
+echo "$RUNNER_SHA256  /tmp/$tarball" | sha256sum --check --strict
+
+mkdir -p "$runner_dir"
+tar -xzf "/tmp/$tarball" -C "$runner_dir"
+rm -f "/tmp/$tarball"
+chown -R "$runner_user:$runner_user" "$runner_dir"
+
+log "installing runner dependencies"
+"$runner_dir/bin/installdependencies.sh"
+
+# --- Ephemeral mode: hand over to the loop service ----------------------------
+if [[ $RUNNER_EPHEMERAL == true ]]; then
+  systemctl daemon-reload
+  systemctl enable --now github-runner-ephemeral.service
+  log "ephemeral mode: github-runner-ephemeral.service started; the PAT stays on the VM"
+  exit 0
+fi
+
+# --- Persistent mode: register once ------------------------------------------
+token=""
+for attempt in 1 2 3 4 5; do
+  rc=0
+  token=$(/usr/local/sbin/github-runner-token) || rc=$?
+  [[ $rc -eq 0 ]] && break
+  [[ $rc -eq 2 ]] && { log "registration token request failed; not retrying"; exit 1; }
+  log "registration token request failed (attempt $attempt/5), retrying in 15s"
+  sleep 15
+done
+[[ -n $token ]] || { log "could not get a registration token"; exit 1; }
+
+log "registering runner '$RUNNER_NAME' with org '$GITHUB_ORG' (group '$RUNNER_GROUP', labels '$RUNNER_LABELS')"
+cd "$runner_dir"
+runuser -u "$runner_user" -- ./config.sh \
+  --unattended \
+  --url "https://github.com/$GITHUB_ORG" \
+  --token "$token" \
+  --name "$RUNNER_NAME" \
+  --runnergroup "$RUNNER_GROUP" \
+  --labels "$RUNNER_LABELS" \
+  --work _work \
+  --replace
+unset token
+
+./svc.sh install "$runner_user"
+./svc.sh start
+
+# The PAT isn't needed again until the VM is rebuilt. This removes the copies
+# on the VM's filesystem; the cidata CD-ROM still holds one (see README, Secrets).
+log "removing PAT from the VM filesystem"
+shred --remove /etc/github-runner/pat
+rm -f /var/lib/cloud/instance/user-data.txt /var/lib/cloud/instance/user-data.txt.i
+
+log "done"

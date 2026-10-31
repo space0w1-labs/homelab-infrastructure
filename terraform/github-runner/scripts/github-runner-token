@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Prints a fresh org runner registration token (valid 1 hour) to stdout,
+# requested with the PAT in /etc/github-runner/pat.
+#
+# Exit codes: 0 ok, 2 auth/permission error (retrying won't help), 1 other.
+set -euo pipefail
+
+# shellcheck source=/dev/null
+source /etc/github-runner/runner.env
+pat_file=/etc/github-runner/pat
+
+if [[ ! -r $pat_file ]]; then
+  echo "github-runner-token: $pat_file not found (deleted after registration in persistent mode)" >&2
+  exit 2
+fi
+
+response=$(mktemp)
+trap 'rm -f "$response"' EXIT
+
+# The Authorization header is passed through --config on stdin so the PAT
+# never appears in the process list.
+status=$(
+  printf 'header = "Authorization: Bearer %s"\n' "$(tr -d '[:space:]' < "$pat_file")" |
+    curl --silent --show-error --config - \
+      --request POST \
+      --header "Accept: application/vnd.github+json" \
+      --header "X-GitHub-Api-Version: 2022-11-28" \
+      --output "$response" --write-out '%{http_code}' \
+      "https://api.github.com/orgs/$GITHUB_ORG/actions/runners/registration-token"
+) || { echo "github-runner-token: request to api.github.com failed" >&2; exit 1; }
+
+case $status in
+  201)
+    jq --raw-output .token "$response"
+    ;;
+  401)
+    echo "github-runner-token: 401 Unauthorized - the PAT is wrong, expired or revoked" >&2
+    exit 2
+    ;;
+  403 | 404)
+    echo "github-runner-token: $status - the PAT lacks 'Self-hosted runners: read and write' on org '$GITHUB_ORG'," >&2
+    echo "  is not owned by the org, or is still waiting for org approval" >&2
+    exit 2
+    ;;
+  *)
+    echo "github-runner-token: unexpected HTTP $status: $(head -c 500 "$response")" >&2
+    exit 1
+    ;;
+esac

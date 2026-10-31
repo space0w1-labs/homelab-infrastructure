@@ -1,0 +1,75 @@
+#cloud-config
+# Rendered by Terraform (templatefile). Runs once, on the VM's first boot.
+# Values are JSON-encoded, which is valid YAML and safely quoted.
+
+hostname: ${jsonencode(hostname)}
+manage_etc_hosts: true
+
+# Admin access on the default 'ubuntu' user.
+ssh_authorized_keys: ${jsonencode(ssh_public_keys)}
+
+package_update: true
+
+apt:
+  sources:
+    docker:
+      source: "deb [arch=amd64 signed-by=$KEY_FILE] https://download.docker.com/linux/ubuntu $RELEASE stable"
+      keyid: 9DC858229FC7DD38854AE2D88D81803C0EBFCD88
+
+packages:
+  - qemu-guest-agent
+  - ca-certificates
+  - curl
+  - jq
+  - docker-ce
+  - docker-ce-cli
+  - containerd.io
+  - docker-buildx-plugin
+  - docker-compose-plugin
+
+write_files:
+  - path: /etc/github-runner/runner.env
+    owner: root:root
+    permissions: "0644"
+    content: |
+      GITHUB_ORG=${jsonencode(github_org)}
+      RUNNER_NAME=${jsonencode(runner_name)}
+      RUNNER_GROUP=${jsonencode(runner_group)}
+      RUNNER_LABELS=${jsonencode(runner_labels)}
+      RUNNER_VERSION=${jsonencode(runner_version)}
+      RUNNER_SHA256=${jsonencode(runner_sha256)}
+      RUNNER_EPHEMERAL=${jsonencode(tostring(ephemeral))}
+
+  - path: /etc/github-runner/pat
+    owner: root:root
+    permissions: "0600"
+    content: ${jsonencode(github_pat)}
+
+  - path: /usr/local/sbin/github-runner-token
+    owner: root:root
+    permissions: "0755"
+    content: |
+      ${indent(6, chomp(token_script))}
+
+  - path: /usr/local/sbin/github-runner-setup
+    owner: root:root
+    permissions: "0755"
+    content: |
+      ${indent(6, chomp(setup_script))}
+
+  - path: /usr/local/sbin/github-runner-ephemeral
+    owner: root:root
+    permissions: "0755"
+    content: |
+      ${indent(6, chomp(ephemeral_script))}
+
+  - path: /etc/systemd/system/github-runner-ephemeral.service
+    owner: root:root
+    permissions: "0644"
+    content: |
+      ${indent(6, chomp(ephemeral_unit))}
+
+runcmd:
+  - [systemctl, start, qemu-guest-agent]
+  - [systemctl, enable, --now, docker]
+  - [/usr/local/sbin/github-runner-setup]
