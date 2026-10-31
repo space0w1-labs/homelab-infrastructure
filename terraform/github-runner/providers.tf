@@ -8,5 +8,12 @@ provider "proxmox" {
   ssh {
     agent    = true
     username = var.proxmox_ssh_username
+
+    # Use the endpoint's host rather than letting the provider pick an
+    # address from the node's network interfaces.
+    node {
+      name    = var.proxmox_node
+      address = regex("^https?://([^:/]+)", var.proxmox_endpoint)[0]
+    }
   }
 }

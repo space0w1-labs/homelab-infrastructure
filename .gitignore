@@ -8,3 +8,4 @@ apps/signal/signal-secret.yaml
 *.tfvars
 *.tfplan
 crash.log
+.DS_Store
