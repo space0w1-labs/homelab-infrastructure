@@ -1,2 +1,10 @@
 .idea/
 apps/signal/signal-secret.yaml
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+*.tfplan
+crash.log
