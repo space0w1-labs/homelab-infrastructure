@@ -43,6 +43,10 @@ resource "proxmox_virtual_environment_vm" "runner" {
   started = true
   on_boot = true
 
+  # Don't wait on a graceful shutdown when destroying; it stalls if the guest
+  # agent isn't running, and the VM is being thrown away anyway.
+  stop_on_destroy = true
+
   clone {
     vm_id = var.template_vm_id
     full  = true
@@ -88,7 +92,15 @@ resource "proxmox_virtual_environment_vm" "runner" {
 
     ip_config {
       ipv4 {
-        address = "dhcp"
+        address = var.ipv4_address
+        gateway = var.ipv4_gateway
+      }
+    }
+
+    dynamic "dns" {
+      for_each = length(var.dns_servers) > 0 ? [1] : []
+      content {
+        servers = var.dns_servers
       }
     }
   }

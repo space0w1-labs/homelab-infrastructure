@@ -91,6 +91,24 @@ variable "vlan_id" {
   default     = null
 }
 
+variable "ipv4_address" {
+  description = "VM's IPv4 address in CIDR form, such as 192.168.2.50/24, or \"dhcp\"."
+  type        = string
+  default     = "dhcp"
+}
+
+variable "ipv4_gateway" {
+  description = "Default gateway. Required with a static ipv4_address."
+  type        = string
+  default     = null
+}
+
+variable "dns_servers" {
+  description = "DNS servers for the VM. Required with a static ipv4_address, since DHCP won't supply them."
+  type        = list(string)
+  default     = []
+}
+
 variable "ssh_public_keys" {
   description = "SSH public keys for the 'ubuntu' admin user."
   type        = list(string)

@@ -307,6 +307,7 @@ Full list with descriptions in `variables.tf`.
 | `vm_id` | Fixed VM ID | next free |
 | `cpu_cores`, `memory_mb`, `disk_gb` | VM size | `4`, `8192`, `64` |
 | `network_bridge`, `vlan_id` | Network. Use an isolated VLAN (see [Security model](#security-model)) | `vmbr0`, none |
+| `ipv4_address`, `ipv4_gateway`, `dns_servers` | VM addressing. Set all three on a network without DHCP | `dhcp`, none, none |
 | `ssh_public_keys` | Admin SSH keys for the `ubuntu` user | — |
 | `github_org` | Org the runner registers to | — |
 | `github_pat` | Fine-grained org PAT (sensitive) | — |
