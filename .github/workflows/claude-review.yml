@@ -1,0 +1,16 @@
+# Claude reviews every PR for bugs and security problems, on the self-hosted
+# homelab runner. The job itself lives in space0w1-labs/ci and skips fork PRs.
+name: Claude review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review:
+    permissions:
+      contents: read
+      pull-requests: write
+      id-token: write
+    uses: space0w1-labs/ci/.github/workflows/claude-review.yml@main
+    secrets: inherit
