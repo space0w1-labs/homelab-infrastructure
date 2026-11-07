@@ -1,0 +1,121 @@
+- name: Configure Tailscale subnet router
+  hosts: tailscale_routers
+  gather_facts: false
+
+  pre_tasks:
+    # The Debian LXC template may not ship Python, which Ansible modules need.
+    - name: Bootstrap Python
+      ansible.builtin.raw: test -e /usr/bin/python3 || (apt-get update && apt-get install -y python3)
+      register: bootstrap
+      changed_when: "'Setting up python3' in bootstrap.stdout"
+
+    - name: Gather facts
+      ansible.builtin.setup:
+
+    - name: Check /dev/net/tun is passed through
+      ansible.builtin.stat:
+        path: /dev/net/tun
+      register: tun
+
+    - name: Fail without TUN
+      ansible.builtin.fail:
+        msg: >-
+          /dev/net/tun is missing. Terraform's tun_passthrough step didn't run or
+          the container wasn't rebooted. On the node: pct set <vmid> --dev0 /dev/net/tun && pct reboot <vmid>
+      when: not tun.stat.exists or not tun.stat.ischr
+
+  handlers:
+    - name: Apply sysctl
+      ansible.builtin.command: sysctl -p /etc/sysctl.d/99-tailscale.conf
+      changed_when: true
+
+  tasks:
+    # --- Install (official apt repo) -----------------------------------------
+
+    - name: Install prerequisites
+      ansible.builtin.apt:
+        name: [ca-certificates, curl]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Add Tailscale signing key
+      ansible.builtin.get_url:
+        url: "https://pkgs.tailscale.com/stable/debian/{{ ansible_facts['distribution_release'] }}.noarmor.gpg"
+        dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+        mode: "0644"
+
+    - name: Add Tailscale apt repo
+      ansible.builtin.copy:
+        dest: /etc/apt/sources.list.d/tailscale.list
+        content: >
+          deb [signed-by=/usr/share/keyrings/tailscale-archive-keyring.gpg]
+          https://pkgs.tailscale.com/stable/debian {{ ansible_facts['distribution_release'] }} main
+        mode: "0644"
+
+    - name: Install Tailscale
+      ansible.builtin.apt:
+        name: tailscale
+        state: present
+        update_cache: true
+
+    - name: Enable tailscaled
+      ansible.builtin.systemd_service:
+        name: tailscaled
+        enabled: true
+        state: started
+
+    # --- IP forwarding --------------------------------------------------------
+
+    - name: Enable IP forwarding
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-tailscale.conf
+        content: |
+          net.ipv4.ip_forward = 1
+          net.ipv6.conf.all.forwarding = 1
+        mode: "0644"
+      notify: Apply sysctl
+
+    - name: Flush handlers
+      ansible.builtin.meta: flush_handlers
+
+    # --- tailscale up ---------------------------------------------------------
+
+    - name: Read Tailscale state
+      ansible.builtin.command: tailscale status --json
+      register: ts_status
+      changed_when: false
+      failed_when: false
+
+    - name: Join tailnet
+      ansible.builtin.command: >-
+        tailscale up
+        --authkey={{ tailscale_authkey }}
+        --hostname={{ tailscale_hostname }}
+        --advertise-routes={{ tailscale_advertise_routes | join(',') }}
+      when: >-
+        ts_status.rc != 0 or
+        (ts_status.stdout | from_json).BackendState != 'Running'
+      no_log: true
+      changed_when: true
+
+    # Already joined: keep the advertised routes in line with vars.yml without
+    # needing the auth key again.
+    - name: Read Tailscale prefs
+      ansible.builtin.command: tailscale debug prefs
+      register: ts_prefs
+      changed_when: false
+
+    - name: Update advertised routes
+      ansible.builtin.command: >-
+        tailscale set --advertise-routes={{ tailscale_advertise_routes | join(',') }}
+      when: >-
+        ((ts_prefs.stdout | from_json).AdvertiseRoutes | default([], true) | sort)
+        != (tailscale_advertise_routes | sort)
+      changed_when: true
+
+    - name: Remind about route approval
+      ansible.builtin.debug:
+        msg: >-
+          If this is a new node, approve {{ tailscale_advertise_routes | join(', ') }} at
+          https://login.tailscale.com/admin/machines → {{ tailscale_hostname }} → Edit route settings.

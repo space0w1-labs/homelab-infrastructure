@@ -1,0 +1,16 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+
+proxmox_endpoint  = "https://192.168.2.2:8006/"
+proxmox_api_token = "terraform@pve!provider=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+proxmox_node          = "proxmoxtwo"
+proxmox_node_ssh_host = "192.168.2.50"
+
+# Defaults: VMID 200, 192.168.2.51/24, hostname tailscale-router.
+# vm_id        = 200
+# hostname     = "tailscale-router"
+# ipv4_address = "192.168.2.51/24"
+
+ssh_public_keys = [
+  "ssh-ed25519 AAAA... you@laptop",
+]
