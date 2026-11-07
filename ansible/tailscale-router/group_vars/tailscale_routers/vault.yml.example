@@ -1,0 +1,5 @@
+# Template for vault.yml. Create the real file encrypted with:
+#   ansible-vault create group_vars/tailscale_routers/vault.yml
+# Use a REUSABLE, non-ephemeral auth key from
+# https://login.tailscale.com/admin/settings/keys
+vault_tailscale_authkey: "tskey-auth-xxxxxxxxxxxx"

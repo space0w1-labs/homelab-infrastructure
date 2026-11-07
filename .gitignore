@@ -9,3 +9,7 @@ apps/signal/signal-secret.yaml
 *.tfplan
 crash.log
 .DS_Store
+
+# Ansible
+ansible/**/vault.yml.decrypted
+.vault_pass

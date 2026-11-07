@@ -1,0 +1,8 @@
+tailscale_advertise_routes:
+  - 192.168.2.0/24
+
+# Name shown in the Tailscale admin console.
+tailscale_hostname: "{{ inventory_hostname }}"
+
+# Defined (encrypted) in vault.yml.
+tailscale_authkey: "{{ vault_tailscale_authkey }}"
