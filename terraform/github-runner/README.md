@@ -1,6 +1,6 @@
 # GitHub Actions runner (Proxmox + Terraform)
 
-> **Status:** implemented, not yet deployed. `terraform validate` passes; the first real `apply` is still to come.
+> **Status:** deployed as `github-runner` (persistent mode). It runs the Claude PR reviews for this repo and Signal.
 
 | File | Purpose |
 |---|---|
@@ -271,10 +271,9 @@ terraform apply
 runs-on: [self-hosted, linux, homelab]
 ```
 
-To test it, add this to a private repo in the org and run it from the Actions tab:
+In this repo, the [Claude review](#claude-pr-review) runs on the runner for every PR, so a green `Claude review` check shows the runner works. To test a fresh runner on its own, run a throwaway workflow like this from the Actions tab of a private repo in the org, then delete it:
 
 ```yaml
-# .github/workflows/runner-test.yml
 on: workflow_dispatch
 jobs:
   test:
@@ -282,6 +281,25 @@ jobs:
     steps:
       - run: hostname && docker version
 ```
+
+### Claude PR review
+
+The main job this runner does. The shared workflow is `space0w1-labs/ci/.github/workflows/claude-review.yml`. It runs [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action) on `[self-hosted, homelab]` with the review prompt and the allowed tools. Each repo that wants reviews adds a small caller workflow (see `.github/workflows/claude-review.yml` here, or Signal's):
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+jobs:
+  review:
+    permissions: { contents: read, pull-requests: write, id-token: write }
+    uses: space0w1-labs/ci/.github/workflows/claude-review.yml@main
+    secrets: inherit
+```
+
+- `ANTHROPIC_API_KEY` is an org secret, so new repos need no setup.
+- Each run starts a fresh Claude Code process, with no memory of earlier reviews. Every push to an open PR triggers a new review, and each review uses API credit.
+- To change the prompt or tools for every repo at once, edit the file in `ci`.
 
 ### Onboarding a new repo
 
@@ -368,6 +386,8 @@ jobs:
 ```
 
 Use this in **public** repos only. Private repos can't be forked by outsiders, so plain `runs-on: [self-hosted, linux, homelab]` is fine there.
+
+A job that should never run for forks can skip them instead of sending them to a hosted runner. The shared Claude review does this with `if: ${{ !github.event.pull_request.head.repo.fork }}`. That's equally safe: fork PRs don't get the org secrets anyway, so the review couldn't run for them.
 
 Layer 3 only protects workflows that use it, and a fork PR can edit the workflow file itself. That's why layer 2 matters: an approval request from an outside contributor that changes anything under `.github/workflows/` deserves a close look before you approve it.
 
