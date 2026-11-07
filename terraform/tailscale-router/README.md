@@ -65,13 +65,21 @@ Check it on the node: `pct config 200 | grep dev0` should print `dev0: /dev/net/
 
 ### 2. Configure it
 
+The encrypted auth key is committed in `group_vars/tailscale_routers/vault.yml`, so a rebuild only needs the vault password:
+
 ```sh
 cd ansible/tailscale-router
-cp group_vars/tailscale_routers/vault.yml.example group_vars/tailscale_routers/vault.yml
-# put the auth key in, then encrypt it BEFORE committing:
-ansible-vault encrypt group_vars/tailscale_routers/vault.yml
 ansible-playbook playbook.yml --ask-vault-pass
+ansible-playbook playbook.yml --ask-vault-pass --check --diff   # dry run: show what would change
 ```
+
+To put in a new auth key (expired, revoked, or rotated), edit the vault in place. **Don't** copy `vault.yml.example` over it, because that replaces the real key with the placeholder:
+
+```sh
+ansible-vault edit group_vars/tailscale_routers/vault.yml
+```
+
+`vault.yml.example` only shows the format. Use it only when setting this up from scratch somewhere `vault.yml` doesn't exist yet, with `ansible-vault create group_vars/tailscale_routers/vault.yml`. Use a **reusable, non-ephemeral** key.
 
 If you change the IP or hostname, update `inventory.ini` to match. You can run the playbook again safely. It only runs `tailscale up` if the node isn't connected yet, and only touches the routes if they differ from `vars.yml`.
 

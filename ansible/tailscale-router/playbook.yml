@@ -81,11 +81,15 @@
 
     # --- tailscale up ---------------------------------------------------------
 
+    # The "Read" tasks only look, so they run in --check mode too (check_mode:
+    # false). Otherwise Ansible skips them with empty output and the when:
+    # conditions below fail to parse it.
     - name: Read Tailscale state
       ansible.builtin.command: tailscale status --json
       register: ts_status
       changed_when: false
       failed_when: false
+      check_mode: false
 
     - name: Join tailnet
       ansible.builtin.command: >-
@@ -105,11 +109,15 @@
       ansible.builtin.command: tailscale debug prefs
       register: ts_prefs
       changed_when: false
+      # Fails only in --check mode on a fresh host, where tailscale isn't installed.
+      failed_when: false
+      check_mode: false
 
     - name: Update advertised routes
       ansible.builtin.command: >-
         tailscale set --advertise-routes={{ tailscale_advertise_routes | join(',') }}
       when: >-
+        ts_prefs.rc == 0 and
         ((ts_prefs.stdout | from_json).AdvertiseRoutes | default([], true) | sort)
         != (tailscale_advertise_routes | sort)
       changed_when: true
