@@ -1,0 +1,16 @@
+# Jenkins LTS from pkg.jenkins.io, held at this version. Plugins are tied to
+# the core version, so bump it deliberately (and back up JENKINS_HOME first).
+jenkins_version: "2.568.1"
+jenkins_repo_key: jenkins.io-2026.key
+
+# Docker and containerd are pinned below the current releases on purpose.
+# runc newer than 1.2.x fails inside LXC on Proxmox 8.3 with
+#   open sysctl net.ipv4.ip_unprivileged_port_start file: reopen fd 8: permission denied
+# Docker 29 needs containerd 2.x, so Docker stays on 28 as well. Once the
+# Proxmox host is upgraded, raise these (and drop the holds) to get current runc.
+docker_version: "5:28.5.2-1~debian.12~bookworm"
+containerd_version: "1.7.27-1"
+
+# The k3s registry (NodePort) speaks plain HTTP. Both pipelines push here.
+docker_insecure_registries:
+  - 192.168.2.100:30500

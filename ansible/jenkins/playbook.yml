@@ -1,0 +1,132 @@
+- name: Configure Jenkins controller
+  hosts: jenkins
+  gather_facts: false
+
+  pre_tasks:
+    # The Debian LXC template may not ship Python, which Ansible modules need.
+    - name: Bootstrap Python
+      ansible.builtin.raw: test -e /usr/bin/python3 || (apt-get update && apt-get install -y python3)
+      register: bootstrap
+      changed_when: "'Setting up python3' in bootstrap.stdout"
+
+    - name: Gather facts
+      ansible.builtin.setup:
+
+  handlers:
+    - name: Restart docker
+      ansible.builtin.systemd_service:
+        name: docker
+        state: restarted
+
+    - name: Restart jenkins
+      ansible.builtin.systemd_service:
+        name: jenkins
+        state: restarted
+
+  tasks:
+    # --- Apt repos ------------------------------------------------------------
+
+    - name: Install prerequisites
+      ansible.builtin.apt:
+        name: [ca-certificates, curl, git, fontconfig, rsync]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Add signing keys
+      ansible.builtin.get_url:
+        url: "{{ item.url }}"
+        dest: "/etc/apt/keyrings/{{ item.name }}.asc"
+        mode: "0644"
+      loop:
+        - { name: adoptium, url: "https://packages.adoptium.net/artifactory/api/gpg/key/public" }
+        - { name: docker, url: "https://download.docker.com/linux/debian/gpg" }
+        - { name: jenkins, url: "https://pkg.jenkins.io/debian-stable/{{ jenkins_repo_key }}" }
+      loop_control:
+        label: "{{ item.name }}"
+
+    - name: Add apt repos
+      ansible.builtin.copy:
+        dest: "/etc/apt/sources.list.d/{{ item.name }}.list"
+        content: "deb [signed-by=/etc/apt/keyrings/{{ item.name }}.asc] {{ item.repo }}\n"
+        mode: "0644"
+      loop:
+        - { name: adoptium, repo: "https://packages.adoptium.net/artifactory/deb {{ ansible_facts['distribution_release'] }} main" }
+        - { name: docker, repo: "https://download.docker.com/linux/debian {{ ansible_facts['distribution_release'] }} stable" }
+        - { name: jenkins, repo: "https://pkg.jenkins.io/debian-stable binary/" }
+      loop_control:
+        label: "{{ item.name }}"
+
+    # --- Java + Docker --------------------------------------------------------
+
+    # Debian 12 only ships Java 17; this Jenkins needs 21.
+    - name: Install Java 21
+      ansible.builtin.apt:
+        name: temurin-21-jdk
+        state: present
+        update_cache: true
+
+    - name: Install Docker (pinned, see vars.yml)
+      ansible.builtin.apt:
+        name:
+          - "containerd.io={{ containerd_version }}"
+          - "docker-ce={{ docker_version }}"
+          - "docker-ce-cli={{ docker_version }}"
+          - docker-buildx-plugin
+        state: present
+        allow_downgrade: true
+        allow_change_held_packages: true
+
+    - name: Hold Docker packages
+      ansible.builtin.dpkg_selections:
+        name: "{{ item }}"
+        selection: hold
+      loop: [containerd.io, docker-ce, docker-ce-cli]
+
+    - name: Allow the plain-HTTP registry
+      ansible.builtin.copy:
+        dest: /etc/docker/daemon.json
+        content: "{{ {'insecure-registries': docker_insecure_registries} | to_nice_json }}\n"
+        mode: "0644"
+      notify: Restart docker
+
+    - name: Enable docker
+      ansible.builtin.systemd_service:
+        name: docker
+        enabled: true
+        state: started
+
+    # --- Jenkins --------------------------------------------------------------
+
+    - name: Install Jenkins {{ jenkins_version }}
+      ansible.builtin.apt:
+        name: "jenkins={{ jenkins_version }}"
+        state: present
+        allow_downgrade: true
+        allow_change_held_packages: true
+
+    - name: Hold Jenkins
+      ansible.builtin.dpkg_selections:
+        name: jenkins
+        selection: hold
+
+    # Pipelines run `docker build/push` as the jenkins user.
+    - name: Let jenkins use Docker
+      ansible.builtin.user:
+        name: jenkins
+        groups: docker
+        append: true
+      notify: Restart jenkins
+
+    - name: Enable jenkins
+      ansible.builtin.systemd_service:
+        name: jenkins
+        enabled: true
+        state: started
+
+    - name: Show URL
+      ansible.builtin.debug:
+        msg: >-
+          Jenkins: http://{{ ansible_host }}:8080/ . On a fresh container, restore
+          JENKINS_HOME (see terraform/jenkins/README.md) or finish the setup wizard
+          with: cat /var/lib/jenkins/secrets/initialAdminPassword

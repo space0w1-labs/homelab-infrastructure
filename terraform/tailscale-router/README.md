@@ -13,7 +13,7 @@ This code defines the lab's subnet router: VMID 200, `192.168.2.51`, hostname `t
 
 ## Lab addresses in use
 
-`.1` gateway · `.2` proxmoxone · `.3` Jellyfin · `.50` proxmoxtwo · `.51` this router
+`.1` gateway · `.2` proxmoxone · `.3` Jellyfin · `.7` Jenkins · `.10` workstation · `.50` proxmoxtwo · `.51` this router
 
 `variables.tf` refuses these, but it can't know about anything else. Before you pick a new address, check that nothing answers on it: `ping 192.168.2.52`, then look at the GL.iNet DHCP client list.
 
