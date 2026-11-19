@@ -1,0 +1,6 @@
+# Every *.<lab_domain> name resolves to the reverse proxy (terraform/reverse-proxy).
+lab_domain: lab
+lab_proxy_ip: 192.168.2.20
+
+# uci exports of the dhcp config are saved here before any change (gitignored).
+backup_dir: "{{ playbook_dir }}/backups"

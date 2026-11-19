@@ -1,0 +1,17 @@
+# Managed by Ansible (ansible/reverse-proxy). Edit proxy_services in
+# group_vars/reverse_proxy/vars.yml, not this file.
+#
+# Sites use http:// explicitly: Caddy would otherwise try to get public
+# certificates, which can't be issued for .{{ lab_domain }}.
+{% for svc in proxy_services %}
+
+http://{{ svc.name }}.{{ lab_domain }} {
+	reverse_proxy {{ svc.backend }}
+}
+{% endfor %}
+
+# Any other name (*.lab resolves here for every name) gets a clear 404
+# instead of Caddy's default empty 200.
+http:// {
+	respond "No app configured for {host}. Add it to proxy_services in ansible/reverse-proxy." 404
+}

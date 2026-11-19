@@ -1,0 +1,51 @@
+- name: Configure GL.iNet DNS (wildcard record for the lab domain)
+  hosts: gl_inet
+  # OpenWrt has no Python, so no facts and no regular modules: raw only.
+  gather_facts: false
+
+  vars:
+    dnsmasq_address: "/{{ lab_domain }}/{{ lab_proxy_ip }}"
+
+  tasks:
+    - name: Read dnsmasq address records
+      ansible.builtin.raw: uci -q get dhcp.@dnsmasq[0].address || true
+      register: dnsmasq_addresses
+      changed_when: false
+
+    - name: Decide whether the record is missing
+      ansible.builtin.set_fact:
+        record_missing: "{{ dnsmasq_address not in dnsmasq_addresses.stdout.split() }}"
+
+    - name: Back up the dhcp config
+      when: record_missing
+      block:
+        - name: Export dhcp config
+          ansible.builtin.raw: uci export dhcp | tee /tmp/dhcp.backup
+          register: dhcp_export
+          changed_when: false
+
+        - name: Create local backup directory
+          ansible.builtin.file:
+            path: "{{ backup_dir }}"
+            state: directory
+            mode: "0700"
+          delegate_to: localhost
+
+        - name: Save the export locally
+          ansible.builtin.copy:
+            # raw runs in a pty, so stdout has CRLF line endings; stdout_lines drops them.
+            content: |
+              {% for line in dhcp_export.stdout_lines %}
+              {{ line }}
+              {% endfor %}
+            dest: "{{ backup_dir }}/dhcp-{{ lookup('pipe', 'date +%Y%m%d-%H%M%S') }}.uci"
+            mode: "0600"
+          delegate_to: localhost
+
+    # Restarting dnsmasq drops DNS for about a second; DHCP leases are kept.
+    - name: Add wildcard record and restart dnsmasq
+      ansible.builtin.raw: >-
+        uci add_list dhcp.@dnsmasq[0].address='{{ dnsmasq_address }}' &&
+        uci commit dhcp &&
+        /etc/init.d/dnsmasq restart
+      when: record_missing

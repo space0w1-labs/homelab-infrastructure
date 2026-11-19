@@ -1,6 +1,11 @@
 tailscale_advertise_routes:
   - 192.168.2.0/24
 
+# Don't take DNS settings from the tailnet: the router resolves through its
+# own (Proxmox-set) nameserver, so it doesn't depend on tailnet DNS or on
+# the lab Split DNS route it serves.
+tailscale_accept_dns: false
+
 # Name shown in the Tailscale admin console.
 tailscale_hostname: "{{ inventory_hostname }}"
 
