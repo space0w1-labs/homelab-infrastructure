@@ -13,3 +13,6 @@ crash.log
 # Ansible
 ansible/**/vault.yml.decrypted
 .vault_pass
+
+# Router config backups taken by ansible/gl-inet
+ansible/gl-inet/backups/
