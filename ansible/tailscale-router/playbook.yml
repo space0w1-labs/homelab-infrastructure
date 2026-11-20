@@ -97,6 +97,7 @@
         --authkey={{ tailscale_authkey }}
         --hostname={{ tailscale_hostname }}
         --advertise-routes={{ tailscale_advertise_routes | join(',') }}
+        --accept-dns={{ tailscale_accept_dns | lower }}
       when: >-
         ts_status.rc != 0 or
         (ts_status.stdout | from_json).BackendState != 'Running'
@@ -120,6 +121,14 @@
         ts_prefs.rc == 0 and
         ((ts_prefs.stdout | from_json).AdvertiseRoutes | default([], true) | sort)
         != (tailscale_advertise_routes | sort)
+      changed_when: true
+
+    - name: Update accept-dns
+      ansible.builtin.command: >-
+        tailscale set --accept-dns={{ tailscale_accept_dns | lower }}
+      when: >-
+        ts_prefs.rc == 0 and
+        (ts_prefs.stdout | from_json).CorpDNS != tailscale_accept_dns
       changed_when: true
 
     - name: Remind about route approval

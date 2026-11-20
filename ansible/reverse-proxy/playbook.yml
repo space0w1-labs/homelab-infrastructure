@@ -1,0 +1,16 @@
+- name: Configure reverse proxy
+  hosts: reverse_proxy
+  gather_facts: false
+
+  pre_tasks:
+    # The Debian LXC template may not ship Python, which Ansible modules need.
+    - name: Bootstrap Python
+      ansible.builtin.raw: test -e /usr/bin/python3 || (apt-get update && apt-get install -y python3)
+      register: bootstrap
+      changed_when: "'Setting up python3' in bootstrap.stdout"
+
+    - name: Gather facts
+      ansible.builtin.setup:
+
+  roles:
+    - caddy

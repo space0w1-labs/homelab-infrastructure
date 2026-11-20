@@ -1,0 +1,14 @@
+# Copy to terraform.tfvars and fill in. terraform.tfvars is gitignored.
+
+proxmox_endpoint  = "https://192.168.2.2:8006/"
+proxmox_api_token = "terraform@pve!provider=xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+
+# Defaults: proxmoxthree, VMID 111, 192.168.2.20/24, hostname reverse-proxy,
+# 1 core, 512 MB, 8 GB on local-lvm.
+# proxmox_node = "proxmoxthree"
+# vm_id        = 111
+# ipv4_address = "192.168.2.20/24"
+
+ssh_public_keys = [
+  "ssh-ed25519 AAAA... you@laptop",
+]

@@ -1,0 +1,6 @@
+# Must match lab_domain in ansible/gl-inet (the router's *.lab wildcard).
+lab_domain: lab
+
+# One line per app: http://<name>.lab -> backend. Add a line and re-run the playbook.
+proxy_services:
+  - { name: immich, backend: "192.168.2.8:2283" }

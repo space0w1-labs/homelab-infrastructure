@@ -1,0 +1,43 @@
+# Caddy's official apt repo (Cloudsmith). The repo is release-agnostic.
+- name: Install prerequisites
+  ansible.builtin.apt:
+    name: [ca-certificates, curl]
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Add Caddy signing key
+  ansible.builtin.get_url:
+    url: https://dl.cloudsmith.io/public/caddy/stable/gpg.key
+    dest: /etc/apt/keyrings/caddy.asc
+    mode: "0644"
+
+- name: Add Caddy apt repo
+  ansible.builtin.copy:
+    dest: /etc/apt/sources.list.d/caddy.list
+    content: "deb [signed-by=/etc/apt/keyrings/caddy.asc] https://dl.cloudsmith.io/public/caddy/stable/deb/debian any-version main\n"
+    mode: "0644"
+
+- name: Install Caddy
+  ansible.builtin.apt:
+    name: caddy
+    state: present
+    update_cache: true
+
+- name: Enable Caddy
+  ansible.builtin.systemd_service:
+    name: caddy
+    enabled: true
+    state: started
+
+# validate runs against the rendered temp file, so a broken Caddyfile never
+# replaces the working one.
+- name: Write Caddyfile
+  ansible.builtin.template:
+    src: Caddyfile.j2
+    dest: /etc/caddy/Caddyfile
+    owner: root
+    group: caddy
+    mode: "0640"
+    validate: caddy validate --adapter caddyfile --config %s
+  notify: Reload caddy
