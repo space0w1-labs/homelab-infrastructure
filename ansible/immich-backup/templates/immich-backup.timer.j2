@@ -1,0 +1,11 @@
+# Managed by Ansible (ansible/immich-backup).
+[Unit]
+Description=Nightly Immich media backup
+
+[Timer]
+OnCalendar={{ backup_schedule }}
+# Run at boot if the node was off at the scheduled time.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

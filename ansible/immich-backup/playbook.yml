@@ -1,0 +1,82 @@
+- name: Nightly backup of Immich media to a local volume
+  hosts: immich_backup
+
+  handlers:
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+  tasks:
+    # --- Volume ---------------------------------------------------------------
+
+    # Named outside Proxmox's vm-<id>-disk-N scheme on purpose, so destroying
+    # CT 110 never deletes its backup.
+    - name: Create thin volume
+      community.general.lvol:
+        vg: "{{ backup_vg }}"
+        thinpool: "{{ backup_thinpool }}"
+        lv: "{{ backup_lv }}"
+        size: "{{ backup_size }}"
+        # Never shrink: lowering backup_size must not truncate the filesystem.
+        shrink: false
+      register: backup_lvol
+
+    # In --check mode on a fresh node the volume isn't really created, so the
+    # format and mount steps have nothing to look at yet.
+    - name: Format and mount
+      when: not (ansible_check_mode and backup_lvol is changed)
+      block:
+        # Only formats a volume with no filesystem on it.
+        - name: Create filesystem
+          community.general.filesystem:
+            dev: "/dev/{{ backup_vg }}/{{ backup_lv }}"
+            fstype: ext4
+            opts: -L immich-backup
+
+        # Host only. Deliberately not bind-mounted into CT 110, so nothing running
+        # inside the container can modify or delete the backups.
+        - name: Mount volume
+          ansible.posix.mount:
+            path: "{{ backup_mount }}"
+            src: "/dev/{{ backup_vg }}/{{ backup_lv }}"
+            fstype: ext4
+            opts: defaults,noatime,nofail
+            state: mounted
+
+        - name: Lock down backup root
+          ansible.builtin.file:
+            path: "{{ backup_mount }}"
+            state: directory
+            owner: root
+            group: root
+            mode: "0700"
+
+    # --- Backup job -----------------------------------------------------------
+
+    - name: Install backup script
+      ansible.builtin.template:
+        src: immich-backup.sh.j2
+        dest: /usr/local/sbin/immich-backup
+        mode: "0750"
+        validate: bash -n %s
+
+    - name: Install systemd units
+      ansible.builtin.template:
+        src: "{{ item }}.j2"
+        dest: "/etc/systemd/system/{{ item }}"
+        mode: "0644"
+      loop:
+        - immich-backup.service
+        - immich-backup.timer
+      notify: Reload systemd
+
+    - name: Flush handlers
+      ansible.builtin.meta: flush_handlers
+
+    - name: Enable timer
+      ansible.builtin.systemd_service:
+        name: immich-backup.timer
+        enabled: true
+        state: started
+      # In --check mode on a fresh node the unit file isn't really installed.
+      ignore_errors: "{{ ansible_check_mode }}"

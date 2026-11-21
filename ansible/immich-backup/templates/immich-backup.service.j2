@@ -1,0 +1,10 @@
+# Managed by Ansible (ansible/immich-backup).
+[Unit]
+Description=Back up Immich media ({{ backup_source }}) to {{ backup_mount }}
+RequiresMountsFor={{ backup_source }} {{ backup_mount }}
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/immich-backup
+Nice=10
+IOSchedulingClass=idle

@@ -1,0 +1,69 @@
+#!/usr/bin/env bash
+# Managed by Ansible (ansible/immich-backup). Snapshot {{ backup_source }} into
+# {{ backup_mount }}/daily/<date>, hard-linking unchanged files to the previous
+# snapshot, then prune old snapshots. Any failed check stops before pruning.
+set -euo pipefail
+
+SRC={{ backup_source }}
+DEST={{ backup_mount }}
+SNAPS="$DEST/daily"
+MAX_DUMP_AGE_MIN=$(( {{ backup_max_dump_age_hours }} * 60 ))
+KEEP_DAILY={{ backup_keep_daily }}
+KEEP_WEEKLY={{ backup_keep_weekly }}
+KEEP_MONTHLY={{ backup_keep_monthly }}
+
+die() { echo "immich-backup: $*" >&2; exit 1; }
+
+# --- Safety checks ------------------------------------------------------------
+
+# Never write into the root filesystem if the backup volume didn't mount.
+mountpoint -q "$DEST" || die "$DEST is not mounted"
+
+# An unmounted thumbdrive leaves an empty $SRC; snapshotting that would look
+# like "everything deleted". Immich's .immich markers prove it's the real one.
+mountpoint -q "$SRC" || die "$SRC is not mounted"
+for d in library upload thumbs backups; do
+  [ -e "$SRC/$d/.immich" ] || die "$SRC/$d/.immich missing; not Immich's media folder?"
+done
+
+# Immich's built-in 02:00 pg_dump must still be running.
+newest_dump=$(find "$SRC/backups" -maxdepth 1 -name 'immich-db-backup-*.sql.gz' -mmin -"$MAX_DUMP_AGE_MIN" -print -quit)
+[ -n "$newest_dump" ] || die "no Immich DB dump newer than {{ backup_max_dump_age_hours }}h in $SRC/backups"
+
+# --- Snapshot -----------------------------------------------------------------
+
+mkdir -p "$SNAPS"
+today=$(date +%F)
+work="$SNAPS/.incomplete-$today"
+latest=$(find "$SNAPS" -mindepth 1 -maxdepth 1 -type d -name '20??-??-??' | sort | tail -1)
+
+rm -rf "$work"
+# -a keeps owners (CT 110's mapped uid 100999), -H keeps hard links, and
+# --numeric-ids avoids remapping uids that don't exist on the host.
+# rsync writes new files and renames them, never editing in place, so
+# hard-linked files in older snapshots are never modified.
+rsync -aH --numeric-ids --exclude=/lost+found \
+  ${latest:+--link-dest="$latest"} \
+  "$SRC/" "$work/"
+
+# Only a complete snapshot gets a date name (re-running today replaces it).
+rm -rf "${SNAPS:?}/$today"
+mv "$work" "$SNAPS/$today"
+ln -sfn "$today" "$SNAPS/latest"
+echo "immich-backup: snapshot $SNAPS/$today (linked to ${latest:-nothing})"
+
+# --- Prune --------------------------------------------------------------------
+
+now=$(date +%s)
+for dir in "$SNAPS"/20??-??-??; do
+  name=$(basename "$dir")
+  age_days=$(( (now - $(date -d "$name" +%s)) / 86400 ))
+  if   (( age_days < KEEP_DAILY )); then continue
+  elif [ "$(date -d "$name" +%u)" = 7 ] && (( age_days < KEEP_WEEKLY * 7 )); then continue
+  elif [ "$(date -d "$name" +%d)" = 01 ] && (( age_days < KEEP_MONTHLY * 31 )); then continue
+  fi
+  echo "immich-backup: pruning $name (age ${age_days}d)"
+  rm -rf "$dir"
+done
+
+df -h "$DEST" | tail -1

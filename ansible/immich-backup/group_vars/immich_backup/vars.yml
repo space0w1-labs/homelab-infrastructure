@@ -1,0 +1,23 @@
+# Thin volume on the node's local-lvm pool. Only uses space as data is written.
+backup_vg: pve
+backup_thinpool: data
+backup_lv: immich-backup
+backup_size: 64g
+backup_mount: /mnt/immich-backup
+
+# What gets copied: Immich's media folder (photos, thumbs, encoded video, and
+# Immich's own nightly DB dumps in backups/). Host path of CT 110's mp0.
+backup_source: /mnt/usbstorage
+
+# Immich writes a pg_dump to <source>/backups at 02:00 (its built-in job).
+# The backup fails if the newest dump is older than this.
+backup_max_dump_age_hours: 26
+
+# Nightly, an hour after Immich's dump. Node and CT 110 are both Asia/Singapore.
+backup_schedule: "*-*-* 03:00:00"
+
+# Dated snapshots kept: last N days, plus Sundays for N weeks, plus the 1st of
+# the month for N months. Unchanged files are hard-linked between snapshots.
+backup_keep_daily: 7
+backup_keep_weekly: 4
+backup_keep_monthly: 6
