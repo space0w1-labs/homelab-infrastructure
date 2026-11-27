@@ -1,4 +1,7 @@
 lab_domain: lab
 
-# List of { name, backend }. Each becomes http://<name>.<lab_domain>.
+# List of { name, backend[, https][, backend_ca | tls_insecure] }. Each becomes http://<name>.<lab_domain>.
+# https: true        -> serve https://<name>.<lab_domain> (Caddy internal CA), http redirects to it.
+# backend_ca: <file>  -> backend speaks HTTPS; verify it against roles/caddy/files/<file>.
+# tls_insecure: true -> backend speaks HTTPS; skip verification.
 proxy_services: []

@@ -30,6 +30,26 @@
     enabled: true
     state: started
 
+# CA certs (public only) that backend_ca services are verified against.
+# Must exist before the Caddyfile is validated.
+- name: Create backend CA directory
+  ansible.builtin.file:
+    path: /etc/caddy/ca
+    state: directory
+    owner: root
+    group: caddy
+    mode: "0755"
+
+- name: Install backend CA certs
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: /etc/caddy/ca/
+    owner: root
+    group: caddy
+    mode: "0644"
+  loop: "{{ proxy_services | selectattr('backend_ca', 'defined') | map(attribute='backend_ca') | unique }}"
+  notify: Reload caddy
+
 # validate runs against the rendered temp file, so a broken Caddyfile never
 # replaces the working one.
 - name: Write Caddyfile

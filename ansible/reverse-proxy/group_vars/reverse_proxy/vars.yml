@@ -6,4 +6,4 @@ proxy_services:
   - { name: immich, backend: "192.168.2.8:2283" }
   - { name: signal, backend: "192.168.2.100:30090" }
   - { name: jellyfin, backend: "192.168.2.3:8096" }
-  - { name: proxmox, backend: "192.168.2.2:8006" }
+  - { name: proxmox, backend: "192.168.2.2:8006", https: true, backend_ca: pve-root-ca.pem }

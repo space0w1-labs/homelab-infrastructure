@@ -1,12 +1,39 @@
 # Managed by Ansible (ansible/reverse-proxy). Edit proxy_services in
 # group_vars/reverse_proxy/vars.yml, not this file.
 #
-# Sites use http:// explicitly: Caddy would otherwise try to get public
-# certificates, which can't be issued for .{{ lab_domain }}.
+# Sites use http:// by default: Caddy would otherwise try to get public
+# certificates, which can't be issued for .{{ lab_domain }}. Services with
+# `https: true` are served over HTTPS with a cert from Caddy's internal CA
+# (trust its root.crt on your devices to avoid browser warnings).
 {% for svc in proxy_services %}
 
+{% if svc.https | default(false) %}
 http://{{ svc.name }}.{{ lab_domain }} {
+	redir https://{host}{uri} permanent
+}
+
+https://{{ svc.name }}.{{ lab_domain }} {
+	tls internal
+{% else %}
+http://{{ svc.name }}.{{ lab_domain }} {
+{% endif %}
+{% if svc.backend_ca is defined %}
+	# Backend speaks HTTPS with a cert signed by a private CA; verify it.
+	reverse_proxy https://{{ svc.backend }} {
+		transport http {
+			tls_trust_pool file /etc/caddy/ca/{{ svc.backend_ca }}
+		}
+	}
+{% elif svc.tls_insecure | default(false) %}
+	# Backend speaks HTTPS with a self-signed cert; not verified.
+	reverse_proxy https://{{ svc.backend }} {
+		transport http {
+			tls_insecure_skip_verify
+		}
+	}
+{% else %}
 	reverse_proxy {{ svc.backend }}
+{% endif %}
 }
 {% endfor %}
 
